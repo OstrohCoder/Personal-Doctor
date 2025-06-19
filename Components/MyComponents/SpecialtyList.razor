@@ -1,0 +1,119 @@
+﻿@using Personal_Doctor.Data
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthStateProvider
+@inject SpecialtyRepository SpecialtyRepository
+
+<h3>Список спеціальностей</h3>
+
+<input class="form-control mb-3" @bind="searchTerm" placeholder="Пошук за назвою..." />
+
+@foreach (var specialty in FilteredSpecialties)
+{
+    <div class="d-flex align-items-center justify-content-between mb-2">
+        <span>@specialty.Name</span>
+        @if (IsAdmin)
+        {
+            <input type="radio" name="selectedSpecialty" class="form-check-input"
+                   @onchange="() => SelectSpecialty(specialty)" checked="@IsSelected(specialty)" />
+        }
+    </div>
+}
+
+@if (IsAdmin)
+{
+    <hr />
+    <h5>@(selectedSpecialty == null ? "Додати спеціальність" : "Редагувати спеціальність")</h5>
+    <EditForm Model="specialtyFormModel" OnValidSubmit="HandleSubmit">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="mb-3">
+            <label>Назва:</label>
+            <InputText class="form-control" @bind-Value="specialtyFormModel.Name" />
+        </div>
+
+        <div class="btn-group">
+            <button class="btn btn-primary" type="submit">@((selectedSpecialty == null) ? "Додати" : "Оновити")</button>
+            <button class="btn btn-danger" type="button" @onclick="HandleDelete">Видалити</button>
+        </div>
+    </EditForm>
+}
+
+@code {
+    [Parameter]
+    public List<Specialty> Specialties { get; set; }
+
+    private string searchTerm = "";
+    private bool IsAdmin;
+    private Specialty selectedSpecialty;
+    private Specialty specialtyFormModel = new Specialty();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        IsAdmin = authState.User.IsInRole("Admin");
+    }
+
+    private IEnumerable<Specialty> FilteredSpecialties =>
+        string.IsNullOrWhiteSpace(searchTerm)
+            ? Specialties
+            : Specialties.Where(s => s.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase));
+
+    private void SelectSpecialty(Specialty specialty)
+    {
+        selectedSpecialty = specialty;
+        specialtyFormModel = new Specialty
+            {
+                Id = specialty.Id,
+                Name = specialty.Name
+            };
+    }
+
+    private bool IsSelected(Specialty specialty) => selectedSpecialty?.Id == specialty.Id;
+
+    private async Task HandleSubmit()
+    {
+        if (string.IsNullOrWhiteSpace(specialtyFormModel.Name))
+        {
+            await ShowMessage("Назва не може бути порожньою.");
+            return;
+        }
+
+        if (selectedSpecialty == null)
+        {
+            await SpecialtyRepository.AddAsync(specialtyFormModel);
+            Specialties.Add(specialtyFormModel);
+        }
+        else
+        {
+            await SpecialtyRepository.UpdateAsync(specialtyFormModel);
+            var index = Specialties.FindIndex(s => s.Id == selectedSpecialty.Id);
+            if (index >= 0)
+                Specialties[index] = specialtyFormModel;
+            selectedSpecialty = null;
+        }
+
+        specialtyFormModel = new Specialty();
+    }
+
+    private async Task HandleDelete()
+    {
+        if (selectedSpecialty == null)
+        {
+            await ShowMessage("Виберіть спеціальність для видалення.");
+            return;
+        }
+
+        await SpecialtyRepository.DeleteAsync(selectedSpecialty);
+        Specialties.RemoveAll(s => s.Id == selectedSpecialty.Id);
+        selectedSpecialty = null;
+        specialtyFormModel = new Specialty();
+    }
+
+    private Task ShowMessage(string message)
+    {
+        // Тут може бути toast або JS alert
+        Console.WriteLine(message);
+        return Task.CompletedTask;
+    }
+}

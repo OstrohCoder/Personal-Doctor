@@ -1,0 +1,36 @@
+﻿@using Microsoft.AspNetCore.Identity
+@using Personal_Doctor.Data
+@inject UserManager<ApplicationUser> UserManager
+
+@code {
+    [Parameter]
+    public ApplicationUser User { get; set; }
+
+    private string Role;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (User != null)
+        {
+            var roles = await UserManager.GetRolesAsync(User);
+            Role = roles.FirstOrDefault();
+        }
+    }
+
+    private string GetImageSrc(byte[] imageData) =>
+        "data:image/png;base64," + Convert.ToBase64String(imageData ?? Array.Empty<byte>());
+}
+
+<a href="#" class="d-flex align-items-center text-decoration-none text-dark py-2 px-3 hover-shadow rounded">
+    <img src="@GetImageSrc(User.Picture)" class="rounded-circle me-3" alt="Avatar" width="48" height="48" />
+    <div>
+        <div class="fw-bold">@User.Name</div>
+        @if (Role == "Doctor" && User.Specialties?.Any() == true)
+        {
+            <div class="text-muted small">
+                @string.Join(", ", User.Specialties.Select(s => s.Name))
+            </div>
+        }
+    </div>
+</a>
+

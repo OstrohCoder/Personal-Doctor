@@ -35,6 +35,11 @@ builder.Services.AddIdentityCore<ApplicationUser>(options => options.SignIn.Requ
     .AddSignInManager()
     .AddDefaultTokenProviders();
 
+builder.Services.AddScoped<ClinicRepository>();
+builder.Services.AddScoped<ConsultationRepository>();
+builder.Services.AddScoped<SpecialtyRepository>();
+builder.Services.AddScoped<UserRepository>();
+
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
 
 var app = builder.Build();
@@ -50,13 +55,14 @@ using (var scope = app.Services.CreateScope()) //створення ролей
             await roleManager.CreateAsync(new IdentityRole(role));
 
     string adminEmail = "admin@email.com";
-    string adminPass = "admin";
+    string adminPass = "Admin!0";
 
     var adminUser = await userManager.FindByEmailAsync(adminEmail);
     if (adminUser == null)
     {
         var newUser = new ApplicationUser
         {
+            Name = "Admin",
             UserName = adminEmail,
             Email = adminEmail,
             EmailConfirmed = true // опціонально, щоб уникнути email-підтвердження

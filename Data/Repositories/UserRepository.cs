@@ -47,10 +47,10 @@ namespace Personal_Doctor.Data
                 .FirstOrDefaultAsync(c => c.Id == id);
         }
 
-        public async Task<float?> GetUserRatingAsync(ApplicationUser user)
+        public float? GetUserRatingAsync(ApplicationUser user)
         {
             var consultations = user.DoctorConsultations;
-            int? summaryRating = 0;
+            float? summaryRating = 0;
             int ratingsNumber = 0;
 
             foreach (var consultation in consultations)
@@ -63,7 +63,7 @@ namespace Personal_Doctor.Data
             }
 
             if (ratingsNumber == 0) return 0;
-            else return summaryRating /= ratingsNumber;
+            else return summaryRating / ratingsNumber;
         }
     }
 }

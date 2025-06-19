@@ -1,0 +1,101 @@
+﻿@using Microsoft.AspNetCore.Identity
+@using Personal_Doctor.Data
+@inject UserManager<ApplicationUser> UserManager
+@inject SpecialtyRepository SpecialtyRepository
+@inject UserRepository UserRepository
+@inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<h3 class="mb-3">Користувачі</h3>
+
+<div class="mb-3 row g-3 align-items-center">
+    <div class="col-auto">
+        <input class="form-control" type="text" @bind="searchTerm" placeholder="Пошук по імені..." />
+    </div>
+    <div class="col-auto">
+        <select class="form-select" @bind="selectedSpecialtyId">
+            <option value="">Усі спеціальності</option>
+            @foreach (var spec in specialties)
+            {
+                <option value="@spec.Id">@spec.Name</option>
+            }
+        </select>
+    </div>
+</div>
+
+@if (FilteredUsers.Any())
+{
+    @foreach (var user in FilteredUsers)
+    {
+        <div class="d-flex align-items-center justify-content-between border rounded p-2 mb-2">
+            <UserListItem User="user" />
+            @if (isAdmin)
+            {
+                <input type="radio" name="selectedUser" @onchange="() => selectedUser = user" checked="@(selectedUser?.Id == user.Id)" />
+            }
+        </div>
+    }
+}
+else
+{
+    <p class="text-muted">Немає користувачів за заданими параметрами.</p>
+}
+
+@if (isAdmin)
+{
+    <div class="mt-3">
+        <button class="btn btn-danger" @onclick="DeleteSelectedUser">Видалити</button>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public List<ApplicationUser> Users { get; set; } = new();
+
+    private string searchTerm = string.Empty;
+    private string? selectedSpecialtyId;
+    private List<Specialty> specialties = new();
+    private ApplicationUser? selectedUser;
+    private bool isAdmin;
+
+    protected override async Task OnInitializedAsync()
+    {
+        specialties = await SpecialtyRepository.GetAllAsync();
+
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var currentUser = await UserManager.GetUserAsync(authState.User);
+        if (currentUser != null)
+        {
+            var roles = await UserManager.GetRolesAsync(currentUser);
+            isAdmin = roles.Contains("Admin");
+        }
+    }
+
+    private IEnumerable<ApplicationUser> FilteredUsers =>
+        Users
+            .Where(u => string.IsNullOrWhiteSpace(searchTerm) || u.Name.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
+            .Where(u => string.IsNullOrEmpty(selectedSpecialtyId) ||
+                        (u.Specialties != null && u.Specialties.Any(s => s.Id.ToString() == selectedSpecialtyId)))
+            .ToList();
+
+    private async Task DeleteSelectedUser()
+    {
+        if (selectedUser == null)
+        {
+            await ShowAlert("Будь ласка, виберіть користувача для видалення.");
+            return;
+        }
+
+        await UserRepository.DeleteAsync(selectedUser);
+
+        Users.Remove(selectedUser);
+        selectedUser = null;
+    }
+
+    private async Task ShowAlert(string message)
+    {
+        // Placeholder - заміни на свій компонент повідомлень або JS-інтеграцію
+        await Task.Run(() => Console.WriteLine("Alert: " + message));
+    }
+}
+

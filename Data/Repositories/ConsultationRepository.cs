@@ -60,5 +60,20 @@ namespace Personal_Doctor.Data
                 .Where(c => c.PatientId == patientId)
                 .ToListAsync();
         }
+
+        public async Task<Dictionary<DateOnly, List<Consultation>>> GetByDoctorIdGroupedByDateAsync(string doctorId)
+        {
+            var consultations = await _context.Consultations
+                .Include(c => c.Patient)
+                .Where(c => c.DoctorId == doctorId)
+                .ToListAsync();
+
+            return consultations
+                .GroupBy(c => c.DayDate)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.OrderBy(c => c.BeginningTime).ToList()
+                );
+        }
     }
 }

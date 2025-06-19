@@ -1,0 +1,224 @@
+﻿<div class="border p-4 rounded-lg bg-gray-100 shadow">
+    <h2 class="text-xl font-semibold mb-4">@Day.ToLongDateString()</h2>
+
+    @foreach (var c in Consultations.OrderBy(c => c.BeginningTime))
+    {
+        <div class="flex items-start space-x-2">
+            @if (isDoctor)
+            {
+                <input type="checkbox" checked="@(selectedConsultation == c)" @onclick="@(() => SelectConsultation(c))" />
+            }
+            else if (isPatient)
+            {
+                <button class="text-blue-600 underline" @onclick="@(() => ToggleBooking(c))">
+                    @(c.PatientId == currentUserId ? "Відписатися" : "Записатися")
+                </button>
+            }
+
+            <ConsultationCard Consultation="c" />
+        </div>
+    }
+
+    @if (isDoctor)
+    {
+        <div class="mt-6 p-4 bg-white border rounded">
+            <h3 class="font-semibold mb-2">Редагування / Додавання</h3>
+            <div class="grid grid-cols-3 gap-4 mb-4">
+                <div>
+                    <label>Початок:</label>
+                    <input type="time" @bind="newStart" class="form-input" />
+                </div>
+                <div>
+                    <label>Кінець:</label>
+                    <input type="time" @bind="newEnd" class="form-input" />
+                </div>
+                <div>
+                    <label>Ціна:</label>
+                    <input type="number" step="0.01" @bind="newPrice" class="form-input" />
+                </div>
+            </div>
+            <div class="space-x-2">
+                <button class="btn btn-primary" @onclick="AddConsultation">Додати</button>
+                <button class="btn btn-warning" @onclick="EditConsultation">Редагувати</button>
+                <button class="btn btn-danger" @onclick="DeleteConsultation">Видалити</button>
+            </div>
+
+            <div class="mt-4">
+                <label>Застосувати графік (від-до):</label>
+                <input type="date" @bind="applyFrom" />
+                <input type="date" @bind="applyTo" />
+                <button class="btn btn-secondary ml-2" @onclick="ApplySchedule">Застосувати</button>
+            </div>
+        </div>
+    }
+</div>
+
+@using Microsoft.AspNetCore.Components.Authorization
+@inject ConsultationRepository ConsultationRepository
+@inject AuthenticationStateProvider AuthStateProvider
+
+@using System.Security.Claims
+@using Personal_Doctor.Data
+
+@code {
+    [Parameter] public List<Consultation> Consultations { get; set; } = new();
+    [Parameter] public DateOnly Day { get; set; }
+
+    private string? currentUserId;
+    private bool isDoctor;
+    private bool isPatient;
+
+    private Consultation? selectedConsultation;
+
+    private TimeOnly newStart;
+    private TimeOnly newEnd;
+    private float newPrice;
+
+    private DateOnly applyFrom;
+    private DateOnly applyTo;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        currentUserId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        isDoctor = user.IsInRole("Doctor");
+        isPatient = user.IsInRole("Patient");
+
+        newStart = TimeOnly.FromDateTime(DateTime.Now);
+        newEnd = newStart.AddMinutes(30);
+        newPrice = 100;
+        applyFrom = Day;
+        applyTo = Day;
+    }
+
+    private void SelectConsultation(Consultation consultation)
+    {
+        selectedConsultation = selectedConsultation == consultation ? null : consultation;
+    }
+
+    private async Task AddConsultation()
+    {
+        if (IsOverlapping(newStart, newEnd))
+        {
+            await ShowError("Консультація перетинається з наявною.");
+            return;
+        }
+
+        var consultation = new Consultation
+            {
+                DoctorId = currentUserId!,
+                DayDate = Day,
+                BeginningTime = newStart,
+                EndTime = newEnd,
+                Price = newPrice
+            };
+
+        await ConsultationRepository.AddAsync(consultation);
+        Consultations.Add(consultation);
+    }
+
+    private async Task EditConsultation()
+    {
+        if (selectedConsultation == null)
+        {
+            await ShowError("Оберіть консультацію для редагування.");
+            return;
+        }
+
+        if (IsOverlapping(newStart, newEnd, selectedConsultation.Id))
+        {
+            await ShowError("Редагована консультація перетинається з іншою.");
+            return;
+        }
+
+        selectedConsultation.BeginningTime = newStart;
+        selectedConsultation.EndTime = newEnd;
+        selectedConsultation.Price = newPrice;
+
+        await ConsultationRepository.UpdateAsync(selectedConsultation);
+    }
+
+    private async Task DeleteConsultation()
+    {
+        if (selectedConsultation == null)
+        {
+            await ShowError("Оберіть консультацію для видалення.");
+            return;
+        }
+
+        await ConsultationRepository.DeleteAsync(selectedConsultation);
+        Consultations.Remove(selectedConsultation);
+        selectedConsultation = null;
+    }
+
+    private bool IsOverlapping(TimeOnly start, TimeOnly end, int excludeId = -1)
+    {
+        return Consultations.Any(c =>
+            c.Id != excludeId &&
+            (start < c.EndTime && end > c.BeginningTime)
+        );
+    }
+
+    private async Task ToggleBooking(Consultation c)
+    {
+        if (c.PatientId == currentUserId)
+        {
+            c.PatientId = null;
+        }
+        else if (c.PatientId == null)
+        {
+            c.PatientId = currentUserId;
+        }
+        else
+        {
+            await ShowError("Консультація вже зайнята.");
+            return;
+        }
+
+        await ConsultationRepository.UpdateAsync(c);
+    }
+
+    private async Task ApplySchedule()
+    {
+        var dates = Enumerable.Range(0, applyTo.DayNumber - applyFrom.DayNumber + 1)
+                              .Select(i => applyFrom.AddDays(i));
+
+        foreach (var date in dates)
+        {
+            var consultationsByDate = await ConsultationRepository.GetByDoctorIdGroupedByDateAsync(currentUserId);
+
+            bool conflict = consultationsByDate.TryGetValue(date, out var consultationsForDay) &&
+                consultationsForDay.Any(c =>
+                    !(newEnd <= c.BeginningTime || newStart >= c.EndTime)
+                );
+
+            if (conflict)
+            {
+                await ShowError($"Конфлікт на дату {date}");
+                continue;
+            }
+
+            var c = new Consultation
+                {
+                    DoctorId = currentUserId!,
+                    DayDate = date,
+                    BeginningTime = newStart,
+                    EndTime = newEnd,
+                    Price = newPrice
+                };
+
+            await ConsultationRepository.AddAsync(c);
+            Consultations.Add(c);
+        }
+    }
+
+    private Task ShowError(string message)
+    {
+        // Реалізуй свій механізм повідомлень, наприклад Snackbar
+        Console.WriteLine(message);
+        return Task.CompletedTask;
+    }
+}
+
+

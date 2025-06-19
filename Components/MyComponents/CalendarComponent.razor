@@ -1,0 +1,85 @@
+﻿@using Personal_Doctor.Data
+@using MyComponents
+@inject ConsultationRepository ConsultationRepository
+
+@code {
+    [Parameter]
+    public ApplicationUser Doctor { get; set; }
+
+    private Dictionary<DateOnly, List<Consultation>> _consultationsByDate = new();
+    private DateOnly _today = DateOnly.FromDateTime(DateTime.Today);
+    private DateOnly? _selectedDate;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Doctor != null)
+        {
+            _consultationsByDate = await ConsultationRepository.GetByDoctorIdGroupedByDateAsync(Doctor.Id);
+        }
+    }
+
+    private void SelectDate(DateOnly date)
+    {
+        _selectedDate = date;
+    }
+
+    private void CloseDayWindow()
+    {
+        _selectedDate = null;
+    }
+
+    private IEnumerable<DateOnly> GetDatesInRange()
+    {
+        var start = _today.AddMonths(-1);
+        var end = _today.AddMonths(1);
+        for (var date = start; date <= end; date = date.AddDays(1))
+        {
+            yield return date;
+        }
+    }
+
+    private string GetCellClasses(DateOnly date)
+    {
+        var classes = "border rounded text-center p-2 m-1";
+        if (date == _today)
+            classes += " bg-primary text-white";
+        else if (_consultationsByDate.ContainsKey(date))
+            classes += " border-primary";
+        else
+            classes += " bg-light";
+        return classes;
+    }
+}
+
+<div class="container mt-4">
+    <div class="row row-cols-7">
+        @foreach (var date in GetDatesInRange())
+        {
+            <div class="col">
+                <button class="@GetCellClasses(date)" style="width: 100%;" @onclick="@(() => SelectDate(date))">
+                    @date.Day
+                </button>
+            </div>
+        }
+    </div>
+
+    @if (_selectedDate.HasValue)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Консультації на @(_selectedDate.Value.ToString("dd.MM.yyyy"))</h5>
+                        <button type="button" class="btn-close" @onclick="CloseDayWindow"></button>
+                    </div>
+                    <div class="modal-body">
+                        <ConsultationDayWindow Day="@_selectedDate.Value"
+                                               Consultations="@(_consultationsByDate.TryGetValue(_selectedDate.Value, out var cons) ? cons : new List<Consultation>())"
+                                               OnClose="@CloseDayWindow" />
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
