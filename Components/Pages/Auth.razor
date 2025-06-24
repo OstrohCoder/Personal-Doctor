@@ -1,13 +1,68 @@
 ﻿@page "/auth"
 
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Personal_Doctor.Components.MyComponents
+@using Personal_Doctor.Data
 
 @attribute [Authorize]
 
-<PageTitle>Auth</PageTitle>
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject UserManager<ApplicationUser> UserManager
+@inject SpecialtyRepository SpecialtyRepository
+@inject NavigationManager NavigationManager
 
-<h1>You are authenticated</h1>
+@if (_showDoctorComponent && _doctor != null)
+{
+    <CalendarComponent Doctor="_doctor" />
+}
+else if (_specialties != null)
+{
+    <SpecialtyList Specialties="_specialties" />
+}
+else if (_hidePage)
+{
+    <p>Вам заборонено переглядати цю сторінку.</p>
+}
+else
+{
+    <p>Завантаження...</p>
+}
 
-<AuthorizeView>
-    Hello @context.User.Identity?.Name!
-</AuthorizeView>
+@code {
+    private ApplicationUser? _doctor;
+    private List<Specialty>? _specialties;
+    private bool _showDoctorComponent = false;
+    private bool _hidePage = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (!user.Identity?.IsAuthenticated ?? true)
+        {
+            _hidePage = true;
+            return;
+        }
+
+        if (user.IsInRole("Doctor"))
+        {
+            var userId = UserManager.GetUserId(user);
+            if (userId is not null)
+            {
+                _doctor = await UserManager.FindByIdAsync(userId);
+                _showDoctorComponent = _doctor != null;
+            }
+        }
+        else if (user.IsInRole("Admin"))
+        {
+            _specialties = await SpecialtyRepository.GetAllAsync();
+        }
+        else
+        {
+            _hidePage = true;
+        }
+    }
+}
+

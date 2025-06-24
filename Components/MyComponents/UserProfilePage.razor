@@ -1,4 +1,5 @@
-﻿@using Personal_Doctor.Data
+﻿@page "/person/{UserId}"
+@using Personal_Doctor.Data
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.AspNetCore.Components.Authorization
 @inject UserManager<ApplicationUser> UserManager
@@ -7,67 +8,79 @@
 
 @code {
     [Parameter]
-    public ApplicationUser UserProfile { get; set; }
+    public string UserId { get; set; }
 
-    private string Role;
+    private ApplicationUser? UserProfile;
+    private string? Role;
     private float? Rating;
 
     protected override async Task OnInitializedAsync()
     {
-        if (UserProfile != null)
+        if (!string.IsNullOrWhiteSpace(UserId))
         {
-            var roles = await UserManager.GetRolesAsync(UserProfile);
-            Role = roles.FirstOrDefault();
-
-            if (Role == "Doctor")
+            UserProfile = await UserManager.FindByIdAsync(UserId);
+            if (UserProfile != null)
             {
-                Rating = UserRepository.GetUserRatingAsync(UserProfile);
+                var roles = await UserManager.GetRolesAsync(UserProfile);
+                Role = roles.FirstOrDefault();
+
+                if (Role == "Doctor")
+                {
+                    Rating = UserRepository.GetUserRating(UserProfile);
+                }
             }
         }
     }
 
     private string GetSexLabel(Sex sex) =>
         sex == Sex.Male ? "Чоловіча" : "Жіноча";
-
-    private string GetImageSrc(byte[] imageData) =>
-        "data:image/png;base64," + Convert.ToBase64String(imageData ?? Array.Empty<byte>());
 }
 
-<div class="container mt-4">
-    <div class="row">
-        <div class="col-md-3 text-center">
-            <img src="@GetImageSrc(UserProfile.Picture)" class="img-fluid rounded-circle mb-3" alt="Аватар" />
-        </div>
-        <div class="col-md-9">
-            <h3>@UserProfile.Name</h3>
-            <p><strong>Email:</strong> @UserProfile.Email</p>
-            <p><strong>Телефон:</strong> @UserProfile.PhoneNumber</p>
-            <p><strong>Стать:</strong> @GetSexLabel(UserProfile.Sex)</p>
+@if (UserProfile == null)
+{
+    <div class="alert alert-danger mt-4">
+        Користувача не знайдено.
+    </div>
+}
+else
+{
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-md-3 text-center">
+                <img src="@StaticMimeTypeGetter.GetImageSrc(UserProfile.Picture)" class="img-fluid rounded-circle mb-3" alt="Аватар" />
+            </div>
+            <div class="col-md-9">
+                <h3>@UserProfile.Name</h3>
+                <p><strong>Email:</strong> @UserProfile.Email</p>
+                <p><strong>Телефон:</strong> @UserProfile.PhoneNumber</p>
+                <p><strong>Стать:</strong> @GetSexLabel(UserProfile.Sex)</p>
 
-            @if (Role == "Doctor")
-            {
-                <hr />
-                <p>
-                    <strong>Клініка:</strong>
-                    @(UserProfile.Clinic != null
-                        ? UserProfile.Clinic.Name
-                        : "Працює самостійно")
-                </p>
-
-                @if (UserProfile.Specialties?.Any() == true)
+                @if (Role == "Doctor")
                 {
+                    <hr />
                     <p>
-                        <strong>Спеціальності:</strong>
-                        @string.Join(", ", UserProfile.Specialties.Select(s => s.Name))
+                        <strong>Клініка:</strong>
+                        @(UserProfile.Clinic != null
+                            ? UserProfile.Clinic.Name
+                            : "Працює самостійно")
                     </p>
+
+                    @if (UserProfile.Specialties?.Any() == true)
+                    {
+                        <p>
+                            <strong>Спеціальності:</strong>
+                            @string.Join(", ", UserProfile.Specialties.Select(s => s.Name))
+                        </p>
+                    }
+
+                    <p><strong>Середня оцінка:</strong> @(Rating?.ToString("0.0") ?? "Немає оцінок")</p>
+
+                    <h5 class="mt-4">Графік консультацій:</h5>
+                    <CalendarComponent Doctor="@UserProfile" />
                 }
-
-                <p><strong>Середня оцінка:</strong> @(Rating?.ToString("0.0") ?? "Немає оцінок")</p>
-
-                <h5 class="mt-4">Графік консультацій:</h5>
-                <CalendarComponent Doctor="@UserProfile" />
-            }
+            </div>
         </div>
     </div>
-</div>
+}
+
 

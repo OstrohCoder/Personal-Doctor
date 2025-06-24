@@ -14,6 +14,8 @@
 @inject ILogger<Register> Logger
 @inject NavigationManager NavigationManager
 @inject IdentityRedirectManager RedirectManager
+@inject ClinicRepository ClinicRepository
+@inject SpecialtyRepository SpecialtyRepository
 
 <PageTitle>Register</PageTitle>
 
@@ -27,6 +29,11 @@
             <h2>Create a new account.</h2>
             <hr />
             <ValidationSummary class="text-danger" role="alert" />
+            <div class="form-floating mb-3">
+                <InputText @bind-Value="Input.Name" class="form-control" aria-required="true" placeholder="Name" />
+                <label for="name">Name</label>
+                <ValidationMessage For="() => Input.Name" class="text-danger" />
+            </div>
             <div class="form-floating mb-3">
                 <InputText @bind-Value="Input.Email" class="form-control" autocomplete="username" aria-required="true" placeholder="name@example.com" />
                 <label for="email">Email</label>
@@ -42,6 +49,48 @@
                 <label for="confirm-password">Confirm Password</label>
                 <ValidationMessage For="() => Input.ConfirmPassword" class="text-danger" />
             </div>
+            <div class="form-floating mb-3">
+                <InputSelect @bind-Value="Input.Sex" class="form-control">
+                    <option disabled value="">Select sex</option>
+                    @foreach (Sex s in Enum.GetValues<Sex>())
+                    {
+                        <option value="@s">@s</option>
+                    }
+                </InputSelect>
+                <label>Sex</label>
+                <ValidationMessage For="() => Input.Sex" />
+            </div>
+            <!-- Role selection -->
+            <label>Роль</label>
+            <InputSelect @bind-Value="Input.Role" class="form-control">
+                <option value="Patient">Пацієнт</option>
+                <option value="Doctor">Лікар</option>
+            </InputSelect>
+
+            @if (Input.Role == "Doctor")
+            {
+                <!-- Clinic -->
+                <label>Клініка</label>
+                <InputSelect @bind-Value="Input.ClinicId" class="form-control">
+                    <option value="">-- Виберіть клініку --</option>
+                    @foreach (var clinic in Clinics)
+                    {
+                        <option value="@clinic.Id">@clinic.Name</option>
+                    }
+                </InputSelect>
+
+                <!-- Specialties -->
+                <label>Спеціальності</label>
+                @foreach (var specialty in Specialties)
+                {
+                    <div>
+                        <InputCheckbox @bind-Value="specialtySelections[specialty.Id]" />
+                        @specialty.Name
+                    </div>
+                }
+            }
+            
+            
             <button type="submit" class="w-100 btn btn-lg btn-primary">Register</button>
         </EditForm>
     </div>
@@ -65,16 +114,72 @@
 
     private string? Message => identityErrors is null ? null : $"Error: {string.Join(", ", identityErrors.Select(error => error.Description))}";
 
+    private List<Clinic> Clinics = new();
+    private List<Specialty> Specialties = new();
+    private Dictionary<int, bool> specialtySelections = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        Clinics = await ClinicRepository.GetAllAsync();
+        Specialties = await SpecialtyRepository.GetAllAsync();
+
+        // Заповнити словник checkbox'ів
+        foreach (var specialty in Specialties)
+        {
+            specialtySelections[specialty.Id] = false;
+        }
+    }
+
     public async Task RegisterUser(EditContext editContext)
     {
-        var user = CreateUser();
+        if (Input.Role == "Doctor")
+        {
+            // Валідація клініки
+            if (Input.ClinicId == null)
+            {
+                // Можна використати кастомну помилку або ValidationMessageStore
+                return;
+            }
+
+            // Вибрати спеціальності
+            Input.SelectedSpecialtyIds = specialtySelections
+                .Where(s => s.Value)
+                .Select(s => s.Key)
+                .ToList();
+
+            if (!Input.SelectedSpecialtyIds.Any())
+            {
+                return; // Мінімум 1 спеціальність
+            }
+        }
+
+        var user = new ApplicationUser
+            {
+                UserName = Input.Email,
+                Email = Input.Email,
+                Sex = Input.Sex!.Value,
+                Name = Input.Name
+            };
+
+        if (Input.Role == "Doctor")
+        {
+            user.ClinicId = Input.ClinicId;
+            user.Specialties = Specialties
+                .Where(s => Input.SelectedSpecialtyIds.Contains(s.Id))
+                .ToList();
+        }
 
         await UserStore.SetUserNameAsync(user, Input.Email, CancellationToken.None);
         var emailStore = GetEmailStore();
         await emailStore.SetEmailAsync(user, Input.Email, CancellationToken.None);
         var result = await UserManager.CreateAsync(user, Input.Password);
 
-        if (!result.Succeeded)
+        if (result.Succeeded)
+        {
+            await UserManager.AddToRoleAsync(user, Input.Role);
+            NavigationManager.NavigateTo("/");
+        }
+        else
         {
             identityErrors = result.Errors;
             return;
@@ -127,6 +232,10 @@
     private sealed class InputModel
     {
         [Required]
+        [Display(Name = "Name")]
+        public string Name { get; set; } = "";
+
+        [Required]
         [EmailAddress]
         [Display(Name = "Email")]
         public string Email { get; set; } = "";
@@ -141,5 +250,17 @@
         [Display(Name = "Confirm password")]
         [Compare("Password", ErrorMessage = "The password and confirmation password do not match.")]
         public string ConfirmPassword { get; set; } = "";
+
+        [Required]
+        [Display(Name = "Sex")]
+        public Sex? Sex { get; set; }
+
+        [Required]
+        public string Role { get; set; } = "Patient"; // Default role
+
+        // Optional for Doctors
+        public int? ClinicId { get; set; }
+
+        public List<int> SelectedSpecialtyIds { get; set; } = new();
     }
 }

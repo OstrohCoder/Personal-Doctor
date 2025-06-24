@@ -2,26 +2,17 @@
 @using Microsoft.AspNetCore.Components
 
 <div class="d-flex align-items-center mb-3">
-    <a href="#" class="text-decoration-none text-dark d-flex align-items-center w-100">
-        <img src="@GetImageSource(Clinic.Picture)" class="rounded-circle me-3" style="width: 48px; height: 48px; object-fit: cover;" />
+    <NavLink class="text-decoration-none text-dark d-flex align-items-center w-100" href="@($"/clinic/{Clinic.Id}")">
+        <img src="@StaticMimeTypeGetter.GetImageSrc(Clinic.Picture)" class="rounded-circle me-3" style="width: 48px; height: 48px; object-fit: cover;" />
         <div>
             <div class="fw-bold">@Clinic.Name</div>
             <div class="text-muted small">@Clinic.Address</div>
         </div>
-    </a>
+    </NavLink>
 </div>
 
 @code {
     [Parameter]
     public Clinic Clinic { get; set; }
-
-    private string GetImageSource(byte[] picture)
-    {
-        if (picture == null || picture.Length == 0)
-            return "/img/clinic-avatar-default.svg";
-
-        var base64 = Convert.ToBase64String(picture);
-        return $"data:image/png;base64,{base64}";
-    }
 }
 

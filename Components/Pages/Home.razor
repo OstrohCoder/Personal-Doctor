@@ -1,7 +1,69 @@
 ﻿@page "/"
+@using Personal_Doctor.Data
+@using Personal_Doctor.Components.MyComponents
 
 <PageTitle>Home</PageTitle>
 
-<h1>Hello, world!</h1>
+<h1>Ласкаво просимо до Personal Doctor!</h1>
 
-Welcome to your new app.
+@if (_userRole == "Patient" && _patientConsultations != null)
+{
+    foreach (var consultation in _patientConsultations)
+    {
+        <ConsultationCard Consultation="consultation" />
+    }
+}
+else if (_userRole == "Doctor")
+{
+    if (_todayDoctorConsultations != null)
+    {
+        <ConsultationDayWindow Day="_today" Consultations="_todayDoctorConsultations" />
+    }
+    else
+    {
+        <h3>У Вас сьогодні немає консультацій. Відпочивайте!</h3>
+    }
+}
+else
+{
+    <p>Ви не маєте доступу до консультацій.</p>
+}
+
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ConsultationRepository ConsultationRepository
+
+@code {
+    private string? _userId;
+    private string? _userRole;
+    private List<Consultation>? _patientConsultations;
+    private List<Consultation>? _todayDoctorConsultations;
+
+    private readonly DateOnly _today = DateOnly.FromDateTime(DateTime.Today);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated ?? false)
+        {
+            _userId = user.FindFirst("sub")?.Value; // або ClaimTypes.NameIdentifier
+            _userRole = user.IsInRole("Doctor") ? "Doctor" :
+                        user.IsInRole("Patient") ? "Patient" : null;
+
+            if (_userRole == "Patient")
+            {
+                _patientConsultations = await ConsultationRepository.GetByPatientIdAsync(_userId!);
+            }
+            else if (_userRole == "Doctor")
+            {
+                var consultationsByDate = await ConsultationRepository.GetByDoctorIdGroupedByDateAsync(_userId!);
+                if (consultationsByDate.TryGetValue(_today, out var consultations))
+                {
+                    _todayDoctorConsultations = consultations;
+                }
+            }
+        }
+    }
+}
+

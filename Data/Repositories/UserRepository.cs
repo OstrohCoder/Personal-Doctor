@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 
 namespace Personal_Doctor.Data
 {
@@ -38,6 +39,18 @@ namespace Personal_Doctor.Data
                 .ToListAsync();
         }
 
+        public async Task<List<ApplicationUser>> GetAllDoctorsAsync()
+        {
+             return await _context.Users
+                .Where(u => _context.UserRoles
+                    .Any(ur => ur.UserId == u.Id &&
+                          _context.Roles.Any(r => r.Id == ur.RoleId && r.Name == "Doctor")))
+                .Include(u => u.Specialties)
+                .Include(u => u.DoctorConsultations)
+                .Include(u => u.PatientConsultations)
+                .ToListAsync();
+        }
+
         public async Task<ApplicationUser?> GetByIdAsync(string id)
         {
             return await _context.Users
@@ -47,9 +60,11 @@ namespace Personal_Doctor.Data
                 .FirstOrDefaultAsync(c => c.Id == id);
         }
 
-        public float? GetUserRatingAsync(ApplicationUser user)
+        public float? GetUserRating(ApplicationUser user)
         {
             var consultations = user.DoctorConsultations;
+            if (consultations is null) return 0;
+
             float? summaryRating = 0;
             int ratingsNumber = 0;
 

@@ -5,15 +5,59 @@
 
 <h1>Counter</h1>
 
-<p role="status">Current count: @currentCount</p>
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager NavigationManager
+@inject UserRepository UserRepository
 
-<button class="btn btn-primary" @onclick="IncrementCount">Click me</button>
+@using System.Security.Claims
+@using Personal_Doctor.Components.MyComponents
+@using Personal_Doctor.Data
+
+@if (_hidePage)
+{
+    <p>Вам заборонено переглядати цю сторінку.</p>
+}
+else if (_users != null)
+{
+    <UserList Users="_users" />
+}
+else
+{
+    <p>Завантаження...</p>
+}
 
 @code {
-    private int currentCount = 0;
+    private string? _userRole;
+    private List<ApplicationUser>? _users;
+    private bool _hidePage = false;
 
-    private void IncrementCount()
+    protected override async Task OnInitializedAsync()
     {
-        currentCount++;
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity?.IsAuthenticated ?? false)
+        {
+            if (user.IsInRole("Admin"))
+            {
+                _userRole = "Admin";
+                _users = await UserRepository.GetAllAsync();
+            }
+            else if (user.IsInRole("Doctor"))
+            {
+                _hidePage = true;
+            }
+            else
+            {
+                _userRole = "Other";
+                _users = await UserRepository.GetAllDoctorsAsync();
+            }
+        }
+        else // Незалогінений
+        {
+            _userRole = "Anonymous";
+            _users = await UserRepository.GetAllDoctorsAsync();
+        }
     }
 }
+

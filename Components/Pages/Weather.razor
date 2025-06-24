@@ -1,64 +1,41 @@
 ﻿@page "/weather"
+@using Personal_Doctor.Components.MyComponents
+@using Personal_Doctor.Data
 @attribute [StreamRendering]
 
-<PageTitle>Weather</PageTitle>
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject ClinicRepository ClinicRepository
+@inject NavigationManager NavigationManager
 
-<h1>Weather</h1>
-
-<p>This component demonstrates showing data.</p>
-
-@if (forecasts == null)
+@if (_hidePage)
 {
-    <p><em>Loading...</em></p>
+    <p>Вам заборонено переглядати цю сторінку.</p>
+}
+else if (_clinics != null)
+{
+    <ClinicList Clinics="_clinics" />
 }
 else
 {
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th>Temp. (C)</th>
-                <th>Temp. (F)</th>
-                <th>Summary</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var forecast in forecasts)
-            {
-                <tr>
-                    <td>@forecast.Date.ToShortDateString()</td>
-                    <td>@forecast.TemperatureC</td>
-                    <td>@forecast.TemperatureF</td>
-                    <td>@forecast.Summary</td>
-                </tr>
-            }
-        </tbody>
-    </table>
+    <p>Завантаження...</p>
 }
 
 @code {
-    private WeatherForecast[]? forecasts;
+    private List<Clinic>? _clinics;
+    private bool _hidePage = false;
 
     protected override async Task OnInitializedAsync()
     {
-        // Simulate asynchronous loading to demonstrate streaming rendering
-        await Task.Delay(500);
+        var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
 
-        var startDate = DateOnly.FromDateTime(DateTime.Now);
-        var summaries = new[] { "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching" };
-        forecasts = Enumerable.Range(1, 5).Select(index => new WeatherForecast
+        if (user.Identity?.IsAuthenticated == true && user.IsInRole("Doctor"))
         {
-            Date = startDate.AddDays(index),
-            TemperatureC = Random.Shared.Next(-20, 55),
-            Summary = summaries[Random.Shared.Next(summaries.Length)]
-        }).ToArray();
-    }
+            _hidePage = true;
+            return;
+        }
 
-    private class WeatherForecast
-    {
-        public DateOnly Date { get; set; }
-        public int TemperatureC { get; set; }
-        public string? Summary { get; set; }
-        public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
+        _clinics = await ClinicRepository.GetAllAsync();
     }
 }
+

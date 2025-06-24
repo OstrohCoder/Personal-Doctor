@@ -1,4 +1,6 @@
-﻿@using Personal_Doctor.Data
+﻿@rendermode InteractiveServer
+
+@using Personal_Doctor.Data
 @using Microsoft.AspNetCore.Components.Authorization
 @inject AuthenticationStateProvider AuthStateProvider
 @inject ClinicRepository ClinicRepository
@@ -25,7 +27,7 @@
 {
     <hr />
     <h5>@(selectedClinic == null ? "Додати клініку" : "Редагувати клініку")</h5>
-    <EditForm Model="clinicFormModel" OnValidSubmit="HandleSubmit">
+    <EditForm Model="clinicFormModel" OnValidSubmit="HandleSubmit" FormName="ClinicForm">
         <DataAnnotationsValidator />
         <ValidationSummary />
         <div class="mb-2">

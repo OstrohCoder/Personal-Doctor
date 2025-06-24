@@ -63,12 +63,7 @@ else
         specialties = await SpecialtyRepository.GetAllAsync();
 
         var authState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-        var currentUser = await UserManager.GetUserAsync(authState.User);
-        if (currentUser != null)
-        {
-            var roles = await UserManager.GetRolesAsync(currentUser);
-            isAdmin = roles.Contains("Admin");
-        }
+        isAdmin = authState.User.IsInRole("Admin");
     }
 
     private IEnumerable<ApplicationUser> FilteredUsers =>
